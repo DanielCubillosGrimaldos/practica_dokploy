@@ -1,0 +1,76 @@
+# Fase 5 - Docker Compose con Dokploy
+# Las credenciales NO van en este archivo (se sube al repositorio): se definen en
+# Dokploy -> Docker Compose -> pestaña "Environment". Los nombres están en .env.example.
+services:
+  # Aplicación de ejemplo.
+  # node:20-alpine sin "command" termina de inmediato (no hay proceso en primer plano);
+  # este servidor mínimo mantiene el contenedor vivo para poder probarlo.
+  app:
+    image: node:20-alpine
+    container_name: compose-webapp
+    command: ["node", "-e", "require('http').createServer((req, res) => res.end('compose-webapp OK')).listen(3000)"]
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    volumes:
+      - ../files/app-data:/app/data
+    networks:
+      - compose-net
+    restart: unless-stopped
+
+  # Base de datos MongoDB
+  mongodb:
+    image: mongo:7
+    container_name: compose-mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER:?defina MONGO_ROOT_USER en Environment}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:?defina MONGO_ROOT_PASSWORD en Environment}
+      - MONGO_INITDB_DATABASE=${MONGO_DB:-compose_db}
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - compose-net
+    restart: unless-stopped
+
+  # phpMyAdmin para gestión de MySQL.
+  # Publicado solo en el loopback del servidor: no queda abierto a internet.
+  # Acceso desde su equipo:  ssh -L 8080:localhost:8080 usuario@ip-del-servidor
+  # y luego http://localhost:8080  (para exponerlo, cambie a "8080:80" y use un firewall).
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: compose-phpmyadmin
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      - PMA_HOST=db-service
+      - PMA_PORT=3306
+    depends_on:
+      - db-service
+    networks:
+      - compose-net
+    restart: unless-stopped
+
+  # Base de datos MySQL
+  db-service:
+    image: mysql:8.0
+    container_name: compose-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?defina MYSQL_ROOT_PASSWORD en Environment}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-compose_db}
+      - MYSQL_USER=${MYSQL_USER:?defina MYSQL_USER en Environment}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?defina MYSQL_PASSWORD en Environment}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - compose-net
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  mysql-data:
+
+networks:
+  compose-net:
+    driver: bridge
